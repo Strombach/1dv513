@@ -5,15 +5,21 @@ const fs = require('fs')
 const readline = require('readline')
 
 let con = mysql.createPool({
-    connectionLimit: 10,
+    connectionLimit: 100,
     host: "localhost",
     user: "root",
     password: "root",
     database: 'reddit_database'
 })
 
+let insertArr = []
+
+let test = 0
+
+let rs = fs.createReadStream('./data/RC_2011-07.json')
+
 const stream = readline.createInterface({
-    input: fs.createReadStream('./data/RC_2007-10.json'),
+    input: rs,
     output: process.stdout,
     terminal: false
 })
@@ -23,29 +29,31 @@ stream.on('line', (line) => {
     fillTable(data)
 })
 
-con.getConnection(function (err) {
-    if (err) throw err
+// con.getConnection(function (err) {
+//     if (err) throw err
 
-    console.log('Connected!')
+//     console.log('Connected!')
 
-    let sql = "SELECT * FROM comments;"
-    con.query(sql, function (err, result) {
-        if (err) {
-            createTable()
-        } else {
-            console.log(result)
-        }
-    })
-})
+//     let sql = "SELECT * FROM comments;"
+//     con.query(sql, function (err, result) {
+//         if (err) {
+//             createTable()
+//         } else {
+//             console.log(result)
+//         }
+//     })
+// })
 
 function fillTable(data) {
-    let sqlInsert = "INSERT INTO comments (id, parent_id, link_id, name, author, body, subreddit_id, score, created_utc)\
-    VALUES ('" + data.id + "','" + data.parent_id + "','" + data.link_id + "','" + data.name + "','" + data.author + "'," + mysql.escape(data.body) + ",'" + data.subreddit_id + "','" + data.score + "','" + data.created_utc + "')"
+    let sqlInsert = [data.id, data.parent_id, data.link_id, data.name, data.author, mysql.escape(escape(data.body)), data.subreddit_id, data.score, data.created_utc]
 
-    con.query(sqlInsert, function (err, result) {
-        if (err) throw err;
-        console.log(result);
-    })
+    if (insertArr.length < 1000) {
+        insertArr.push(sqlInsert)
+    } else {
+        stream.pause()
+        pushToSql();
+    }
+
 }
 
 
@@ -68,4 +76,18 @@ function createTable() {
         if (err) throw err;
         console.log(result);
     })
+}
+
+
+function pushToSql() {
+    let insertQ = "INSERT INTO comments (id, parent_id, link_id, name, author, body, subreddit_id, score, created_utc) VALUES ?"
+
+    con.query(insertQ, [insertArr], function (err, result) {
+        if (err) throw err
+        test++
+        console.log(test)
+    })
+
+    insertArr = []
+    stream.resume()
 }
